@@ -1,12 +1,14 @@
 from django.core.exceptions import ObjectDoesNotExist
+from django.contrib.auth import get_user_model
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.decorators import permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticatedOrReadOnly, IsAuthenticated, AllowAny, IsAdminUser
-from .models import Profile
-from myauth.models import User
+from .models import Profile, Bracelet
 from .serializers import *
+
+User = get_user_model()
 
 @permission_classes([IsAuthenticated])
 class CreateProfile(APIView):
@@ -18,19 +20,20 @@ class CreateProfile(APIView):
         else:
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
+
 @permission_classes([IsAuthenticated])
 class ViewProfile(APIView):
     def get(self, request):
         try:
-            profile = int(request.data.get('user'))
-            User.objects.get(pk=profile)
-            profiles = Profile.objects.select_related('user').filter(user__id=profile)
+            user_id = request.user.id
+            profiles = Profile.objects.select_related('user').filter(user__id=user_id)
             serializer = ProfileViewListSerializer(profiles, many=True)
             return Response(serializer.data)
         except (ValueError, TypeError):
             return Response(status=status.HTTP_400_BAD_REQUEST)
         except ObjectDoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
 
 @permission_classes([IsAuthenticated])
 class ProfileDeleteView(APIView):
@@ -40,6 +43,7 @@ class ProfileDeleteView(APIView):
             profile.delete()
         except ObjectDoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+
 
 @permission_classes([IsAuthenticated])
 class InfoBlockCreateView(APIView):
@@ -100,9 +104,9 @@ class InfoBlockDetailView(APIView):
 class InfoBlockListView(APIView):
     def get(self, request):
         try:
-            profile = int(request.data.get('user'))
-            User.objects.get(pk=profile)
-            infoblocks = InfoBlock.objects.select_related('profile').filter(profile_id=profile)
+            profile_id = int(request.data.get('user'))
+            User.objects.get(pk=profile_id)
+            infoblocks = InfoBlock.objects.select_related('profile').filter(profile_id=profile_id)
             serializer = InfoBlockDetailSerializer(infoblocks, many=True)
             return Response(serializer.data)
         except (ValueError, TypeError):
@@ -141,11 +145,15 @@ class AccountDefinition(APIView):
     @permission_classes([AllowAny])
     def get(self, request, pk):
         try:
-            profile = bracelet.objects.get(id=pk)
-            if profile.is_activated:
-                return Response(data={profile.unique_code, profile.profile_id})
+            bracelet = Bracelet.objects.get(id=pk)
+            if bracelet.is_activated:
+                data = {
+                    'unique_code': bracelet.unique_code,
+                    'profile_id': bracelet.profile_id,
+                }
+                return Response(data=data)
             else:
-                return Response({'status': 'get token'})
+                return Response({'status': 'bracelet is not attached'}, status=status.HTTP_423_LOCKED)
         except:
             return Response(status=status.HTTP_404_NOT_FOUND)
 
@@ -153,42 +161,54 @@ class AccountDefinition(APIView):
 @permission_classes([IsAuthenticated])
 class JoinHandler(APIView):
     def post(self, request, pk):
-        unique_handler = bracelet.objects.get(id=pk)
-        serializer = JoinBraceletSerializers(unique_handler)
-        code = request.data.get('unique_code')
-        if code:
-            if code == serializer.data.get('unique_code'):
-                user_id = request.profile.id
-                unique_handler.profile_id = user_id
-                unique_handler.is_activated = True
-                unique_handler.save()
-                return Response({"status": "Connected"})
+        try:
+            unique_code = request.data['unique_code']
+            profile_id = int(request.data['profile_id'])
+            
+            bracelet = Bracelet.objects.get(pk=pk)
+            profile = Profile.objects.get(pk=profile_id)
+            
+            if bracelet.is_activated:
+                return Response({"status": "Bracelet already activated"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            if request.user == profile.user and bracelet.unique_code == unique_code:
+                bracelet.profile = profile
+                bracelet.is_activated = True
+                profile.is_activated = True
+                bracelet.save()
+                profile.save()
+                return Response({"status": "Attached to profile"})
             else:
-                return Response({"status": "Error"})
-        else:
-            return Response({"status": "Data Error"})
+                return Response({"status": "Invalid unique_code or profile_id"}, status=status.HTTP_400_BAD_REQUEST)
+                
+        except (KeyError, ValueError, TypeError):
+            return Response({"status": "unique_code and profile_id are required"}, status=status.HTTP_400_BAD_REQUEST)
+        except ObjectDoesNotExist:
+            return Response({"status": "no such bracelet or profile"}, status=status.HTTP_404_NOT_FOUND)
 
 
 class createhandler(APIView):
     @permission_classes([IsAdminUser])
     def post(self, request):
-        try:
-            handler = CreateBraceletSerializers(data=request.data.get())
-            if handler.is_valid():
-                handler.save()
-                return Response(status=201)
-            else:
-                return Response(status=400)
-        except:
-            return Response(status=404)
+        if not request.user.is_superuser:
+            return Response(status=403)
+            
+        handler = CreateBraceletSerializer(data=request.data)
+        if handler.is_valid():            
+            handler.save()
+            return Response(status=201)
+        else:
+            return Response(handler.errors, status=400)
 
 
 class deleteHandler(APIView):
     @permission_classes([IsAdminUser])
     def delete(self, request, pk):
+        if not request.user.is_superuser:
+            return Response(status=403)
         try:
-            handler = bracelet.objects.get(pk=pk)
+            handler = Bracelet.objects.get(pk=pk)
             handler.delete()
-            return Response(status=201)
+            return Response(status=200)
         except:
             return Response(status=404)

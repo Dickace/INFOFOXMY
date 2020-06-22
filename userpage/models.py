@@ -1,17 +1,23 @@
 from django.db import models
-from myauth.models import User
+from django.contrib.auth import get_user_model
+from django.core.validators import MinLengthValidator
+User = get_user_model()
 
 
 class Profile(models.Model):
+    name = models.CharField(max_length=60)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     is_activated = models.BooleanField(default=False)
 
     def __int__(self):
         return self.id
 
+    def __str__(self):
+        return f"<{self.user} --- {self.name}>"
+
     class Meta:
         verbose_name = 'Профиль'
-        verbose_name_plural = 'Профиля'
+        verbose_name_plural = 'Профили'
 
 
 class InfoBlock(models.Model):
@@ -27,14 +33,29 @@ class InfoBlock(models.Model):
         verbose_name_plural = 'Инфоблоки'
 
 
-class bracelet(models.Model):
-    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, default=None)
-    unique_code = models.CharField(max_length=6, unique=True)
-    is_activated = models.BooleanField()
+class Bracelet(models.Model):
+    profile = models.ForeignKey(Profile, 
+                                on_delete=models.CASCADE, 
+                                null=True, 
+                                blank=True, 
+                                default=None, 
+                                related_name='bracelets')
+    
+    unique_code = models.CharField(unique=True,
+                                   max_length=8,
+                                   validators=[MinLengthValidator(8)])
+    
+    is_activated = models.BooleanField(default=False)
 
     def __int__(self):
         return self.id
-
+    
+    def __str__(self):
+        if self.is_activated:
+            return f'Присоединён к {self.profile}, id={self.id}'
+        else:
+            return f'<Not activated>, id={self.id}'
+    
     class Meta:
         verbose_name = 'Носитель'
         verbose_name_plural = 'Носители'
