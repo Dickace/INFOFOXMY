@@ -1,6 +1,7 @@
 from rest_framework import serializers
-from .models import InfoBlock, bracelet,Profile
+from .models import InfoBlock, Bracelet, Profile
 from django.db import models
+
 
 class InfoBlockDeleteSerializer(serializers.ModelSerializer):
     """ID блока"""
@@ -23,36 +24,51 @@ class InfoBlockCreateSerializer(serializers.ModelSerializer):
         fields = ('title', 'content')
 
 
-class AccountSerializers(serializers.ModelSerializer):
+class AccountSerializer(serializers.ModelSerializer):
     class Meta:
-        model = bracelet
+        model = Bracelet
         fields = ('is_activated',)
 
-class CreateBraceletSerializers(serializers.ModelSerializer):
+
+class CreateBraceletSerializer(serializers.ModelSerializer):
     class Meta:
-        model = bracelet
-        fields = ('profile_id', 'id', 'unique_code',  'is_activated')
-
-
-class JoinBraceletSerializers(serializers.ModelSerializer):
-
-    class Meta:
-        model = bracelet
+        model = Bracelet
         fields = ('unique_code',)
 
-class CheckCodeSerializers(serializers.ModelSerializer):
-    unique_code = models.CharField(max_length=6,)
+
+class JoinBraceletSerializer(serializers.ModelSerializer):
     class Meta:
-        model = bracelet
+        model = Bracelet
+        fields = ('unique_code',)
+
+
+class CheckCodeSerializers(serializers.ModelSerializer):
+    unique_code = models.CharField(max_length=8,)
+    class Meta:
+        model = Bracelet
+
 
 class ProfileCreateSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = Profile
         fields = ('user',)
+
+
+class BraceletForProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Bracelet
+        fields = ('id', 'unique_code')
 
 
 class ProfileViewListSerializer(serializers.ModelSerializer):
+    bracelets = BraceletForProfileSerializer(read_only=True, many=True)
+    
     class Meta:
         model = Profile
-        fields = ('user',)
+        fields = ('name', 'bracelets', 'is_activated')
+
+        
+class PVLS(serializers.ModelSerializer):
+    class Meta:
+        model = Bracelet
+        fields = ('name', 'bracelets', 'user')
