@@ -12,3 +12,6 @@ class Vacancy(models.Model):
     class Meta:
         verbose_name_plural = 'Вакансии'
         verbose_name = 'Вакансия'
+
+
+

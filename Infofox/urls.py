@@ -21,10 +21,9 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api-auth/', include('rest_framework.urls')),
-    path('api/infoblock/', include('userpage.urls')),
+    path('api/userpage/', include('userpage.urls')),
     path('api/vacancy/', include('vacancy.urls')),
     path('auth/', include('myauth.urls')),
-    path('api/handler/',include('QrCodeBase.urls')),
 ]
 
 if settings.DEBUG:
