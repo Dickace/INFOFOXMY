@@ -51,7 +51,7 @@ class CheckCodeSerializers(serializers.ModelSerializer):
 class ProfileCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
-        fields = ('user',)
+        fields = ('user','name')
 
 
 class BraceletForProfileSerializer(serializers.ModelSerializer):

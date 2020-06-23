@@ -13,7 +13,7 @@ class Profile(models.Model):
         return self.id
 
     def __str__(self):
-        return f"<{self.user} --- {self.name}>"
+        return f"<{self.user} - {self.name}>"
 
     class Meta:
         verbose_name = 'Профиль'
@@ -26,7 +26,7 @@ class InfoBlock(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, default=None)
 
     def __str__(self):
-        return self.title
+        return f'{self.profile} - {self.title}'
 
     class Meta:
         verbose_name = 'Инфоблок'
@@ -35,7 +35,7 @@ class InfoBlock(models.Model):
 
 class Bracelet(models.Model):
     profile = models.ForeignKey(Profile, 
-                                on_delete=models.CASCADE, 
+                                on_delete=models.SET_NULL, 
                                 null=True, 
                                 blank=True, 
                                 default=None, 
@@ -51,7 +51,7 @@ class Bracelet(models.Model):
         return self.id
     
     def __str__(self):
-        if self.is_activated:
+        if self.profile != '' and self.profile is not None:
             return f'Присоединён к {self.profile}, id={self.id}'
         else:
             return f'<Not activated>, id={self.id}'
