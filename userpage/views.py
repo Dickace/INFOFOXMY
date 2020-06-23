@@ -118,7 +118,12 @@ class InfoBlockFromProfileListView(APIView):
             if profile.is_activated:
                 infoblocks = InfoBlock.objects.select_related('profile').filter(profile=profile)
                 serializer = InfoBlockDetailSerializer(infoblocks, many=True)
-                return Response(serializer.data)
+                #serializer.data['name'] = profile.name
+                response_data = {
+                    'name': profile.name,
+                    'blocks': serializer.data
+                }
+                return Response(response_data)
             else:
                 return Response(data={'status': 'Профиль не активирован'}, status=status.HTTP_423_LOCKED)
         except (ValueError, TypeError):
@@ -139,6 +144,7 @@ class InfoBlockFromProfileListView(APIView):
             status_code = status.HTTP_404_NOT_FOUND
         return Response(status=status_code)
 
+    @permission_classes([IsAuthenticated])
     def put(self, request, pk):
         try:
             new_profile_name = NewProfileNameSerializer(data=request.data)
