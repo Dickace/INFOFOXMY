@@ -14,6 +14,7 @@ User = get_user_model()
 @permission_classes([IsAuthenticated])
 class CreateProfile(APIView):
     def post(self, request):
+        request.data['user'] = request.user.id
         newProfile = ProfileCreateSerializer(data=request.data)
         if newProfile.is_valid():
             newProfile.save()
@@ -37,34 +38,35 @@ class ViewProfile(APIView):
 
 
 @permission_classes([IsAuthenticated])
-class ProfileDeleteView(APIView):
-    def delete(self, request):
-        try:
-            profile = Profile.objects.get(pk=request.data.id)
-            profile.delete()
-        except ObjectDoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
-
-
-@permission_classes([IsAuthenticated])
 class InfoBlockCreateView(APIView):
-    def post(self, request):
+    def post(self, request, profile_pk):
         infoblock = InfoBlockCreateSerializer(data=request.data)
+        status_code = status.HTTP_201_CREATED
+        
         if infoblock.is_valid():
-            print(infoblock.validated_data)
-            infoblock.save(profile=request.profile)
-            print(infoblock.data)
-            return Response(status=status.HTTP_201_CREATED)
+            try:
+                profile = Profile.objects.get(pk=profile_pk)
+                if profile.user == request.user:
+                    infoblock.save(profile=profile)
+                else:
+                    status_code = status.HTTP_403_FORBIDDEN
+            except ObjectDoesNotExist:
+                status_code = status.HTTP_404_NOT_FOUND
         else:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+            status_code = status.HTTP_400_BAD_REQUEST
+            
+        return Response(status=status_code)
 
 
 @permission_classes([IsAuthenticated])
 class InfoBlockDeleteView(APIView):
-    def delete(self, request, pk):
+    def delete(self, request, profile_pk, block_pk):
         try:
-            infoblock = InfoBlock.objects.filter(profile=pk, id=request.data['id'])
-            if infoblock:
+            infoblock = InfoBlock.objects.get(pk=block_pk)
+            profile = Profile.objects.get(pk=profile_pk)
+            if infoblock.profile != profile:
+                raise ObjectDoesNotExist
+            if request.user == profile.user:
                 infoblock.delete()
                 return Response(status=status.HTTP_200_OK)
             else:
@@ -75,17 +77,23 @@ class InfoBlockDeleteView(APIView):
 
 @permission_classes([IsAuthenticated])
 class InfoBlockChangeView(APIView):
-    def put(self, request, pk):
+    def put(self, request, profile_pk, block_pk):
         infoblock_ser = InfoBlockCreateSerializer(data=request.data)
         if infoblock_ser.is_valid():
             try:
-                infoblock = InfoBlock.objects.filter(profile=pk, id=request.data['id'])
-
-                if infoblock:
-                    infoblock.update(**infoblock_ser.data)
+                infoblock = InfoBlock.objects.get(pk=block_pk)
+                profile = Profile.objects.get(pk=profile_pk)
+                
+                if infoblock.profile != profile:
+                    raise ObjectDoesNotExist
+                if request.user == profile.user:
+                    infoblock.title = infoblock_ser.validated_data['title']
+                    infoblock.content = infoblock_ser.validated_data['content']
+                    infoblock.save()
                     return Response(status=status.HTTP_200_OK)
                 else:
                     return Response(status=status.HTTP_403_FORBIDDEN)
+                    
             except ObjectDoesNotExist:
                 return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -102,21 +110,34 @@ class InfoBlockChangeView(APIView):
 #             return Response(status=status.HTTP_404_NOT_FOUND)
 
 
-@permission_classes([AllowAny])
-class InfoBlockfFromProfileListView(APIView):
+class InfoBlockFromProfileListView(APIView):
+    @permission_classes([AllowAny])
     def get(self, request, pk):
         try:
             profile = Profile.objects.get(id=pk)
             if profile.is_activated:
-                infoblocks = InfoBlock.objects.select_related('profile').filter(profile=pk)
+                infoblocks = InfoBlock.objects.select_related('profile').filter(profile=profile)
                 serializer = InfoBlockDetailSerializer(infoblocks, many=True)
                 return Response(serializer.data)
             else:
-                return Response(data={'status': 'Profile not activated'}, status=status.HTTP_423_LOCKED)
+                return Response(data={'status': 'Профиль не активирован'}, status=status.HTTP_423_LOCKED)
         except (ValueError, TypeError):
             return Response(status=status.HTTP_400_BAD_REQUEST)
         except ObjectDoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
+    
+    @permission_classes([IsAuthenticated])
+    def delete(self, request, pk):
+        status_code = status.HTTP_200_OK
+        try:
+            profile = Profile.objects.get(pk=pk)
+            if request.user == profile.user:
+                profile.delete()
+            else:
+                status_code = status.HTTP_403_FORBIDDEN
+        except ObjectDoesNotExist:
+            status_code = status.HTTP_404_NOT_FOUND
+        return Response(status=status_code)
 
 
 class AccountDefinition(APIView):
@@ -124,7 +145,7 @@ class AccountDefinition(APIView):
     def get(self, request, pk):
         try:
             bracelet = Bracelet.objects.get(id=pk)
-            if bracelet.is_activated:
+            if bracelet.profile == '' or bracelet.profile is None:
                 data = {
                     'unique_code': bracelet.unique_code,
                     'profile_id': bracelet.profile_id,
@@ -146,7 +167,7 @@ class JoinHandler(APIView):
             bracelet = Bracelet.objects.get(pk=pk)
             profile = Profile.objects.get(pk=profile_id)
 
-            if bracelet.is_activated:
+            if bracelet.profile != '' and bracelet.profile is not None:
                 return Response({"status": "Bracelet already activated"}, status=status.HTTP_400_BAD_REQUEST)
 
             if request.user == profile.user and bracelet.unique_code == unique_code:
@@ -164,26 +185,30 @@ class JoinHandler(APIView):
         except ObjectDoesNotExist:
             return Response({"status": "no such bracelet or profile"}, status=status.HTTP_404_NOT_FOUND)
 
+
 @permission_classes([IsAuthenticated])
 class DisconnectBracelet(APIView):
     def post(self, request, pk):
         try:
-           bracelet = Bracelet.objects.get(profile=pk, id=request.data['id'])
-           if bracelet:
-               bracelet.is_activated = False
-               bracelet.profile = None
-               bracelet.save()
-               if not Bracelet.objects.filter(profile=pk)==None:
-                   profile=Profile.objects.get(pk=pk)
-                   profile.is_activated = False
-                   profile.save()
-               return  Response({"status": "Bracelet disconnected"})
-           else:
-               return Response({"status": "Not found bracelets"})
+            profile=Profile.objects.get(pk=pk)
+            
+            if request.user != profile.user:
+                return Response(status=status.HTTP_403_FORBIDDEN)
+                
+            bracelet = Bracelet.objects.get(profile__id=pk, id=request.data['id'])
+            bracelet.is_activated = False
+            bracelet.profile = None
+            bracelet.save()
+            if Bracelet.objects.select_related('profile').filter(profile__id=profile.id).count() <= 0:
+                profile.is_activated = False
+                profile.save()
+            return  Response({"status": "Bracelet disconnected"})
+        
         except (KeyError, ValueError, TypeError):
             return Response({"status": "unique_code and profile_id are required"}, status=status.HTTP_400_BAD_REQUEST)
         except ObjectDoesNotExist:
             return Response({"status": "no such bracelet or profile"}, status=status.HTTP_404_NOT_FOUND)
+
 
 class createhandler(APIView):
     @permission_classes([IsAdminUser])
