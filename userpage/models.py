@@ -44,8 +44,7 @@ class Bracelet(models.Model):
     unique_code = models.CharField(unique=True,
                                    max_length=8,
                                    validators=[MinLengthValidator(8)])
-    
-    is_activated = models.BooleanField(default=False)
+
 
     def __int__(self):
         return self.id

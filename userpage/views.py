@@ -42,7 +42,7 @@ class InfoBlockCreateView(APIView):
     def post(self, request, profile_pk):
         infoblock = InfoBlockCreateSerializer(data=request.data)
         status_code = status.HTTP_201_CREATED
-        
+
         if infoblock.is_valid():
             try:
                 profile = Profile.objects.get(pk=profile_pk)
@@ -54,7 +54,7 @@ class InfoBlockCreateView(APIView):
                 status_code = status.HTTP_404_NOT_FOUND
         else:
             status_code = status.HTTP_400_BAD_REQUEST
-            
+
         return Response(status=status_code)
 
 
@@ -83,7 +83,7 @@ class InfoBlockChangeView(APIView):
             try:
                 infoblock = InfoBlock.objects.get(pk=block_pk)
                 profile = Profile.objects.get(pk=profile_pk)
-                
+
                 if infoblock.profile != profile:
                     raise ObjectDoesNotExist
                 if request.user == profile.user:
@@ -93,7 +93,7 @@ class InfoBlockChangeView(APIView):
                     return Response(status=status.HTTP_200_OK)
                 else:
                     return Response(status=status.HTTP_403_FORBIDDEN)
-                    
+
             except ObjectDoesNotExist:
                 return Response(status=status.HTTP_404_NOT_FOUND)
         return Response(status=status.HTTP_400_BAD_REQUEST)
@@ -125,7 +125,7 @@ class InfoBlockFromProfileListView(APIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
         except ObjectDoesNotExist:
             return Response(status=status.HTTP_404_NOT_FOUND)
-    
+
     @permission_classes([IsAuthenticated])
     def delete(self, request, pk):
         status_code = status.HTTP_200_OK
@@ -139,15 +139,32 @@ class InfoBlockFromProfileListView(APIView):
             status_code = status.HTTP_404_NOT_FOUND
         return Response(status=status_code)
 
+    def put(self, request, pk):
+        try:
+            new_profile_name = NewProfileNameSerializer(data=request.data)
+            if new_profile_name.is_valid():
+                try:
+                    profile = Profile.objects.get(pk=pk)
+                    if request.user == profile.user:
+                        profile.name = new_profile_name.validated_data['name']
+                        profile.save()
+                        return Response(status=status.HTTP_200_OK)
+                    else:
+                        return Response(status=status.HTTP_403_FORBIDDEN)
+                except ObjectDoesNotExist:
+                    return Response(status=status.HTTP_404_NOT_FOUND)
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+        except:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
 
 class AccountDefinition(APIView):
     @permission_classes([AllowAny])
     def get(self, request, pk):
         try:
             bracelet = Bracelet.objects.get(id=pk)
-            if bracelet.profile == '' or bracelet.profile is None:
+            if bracelet.profile:
                 data = {
-                    'unique_code': bracelet.unique_code,
                     'profile_id': bracelet.profile_id,
                 }
                 return Response(data=data)
@@ -167,12 +184,11 @@ class JoinHandler(APIView):
             bracelet = Bracelet.objects.get(pk=pk)
             profile = Profile.objects.get(pk=profile_id)
 
-            if bracelet.profile != '' and bracelet.profile is not None:
+            if bracelet.profile:
                 return Response({"status": "Bracelet already activated"}, status=status.HTTP_400_BAD_REQUEST)
 
             if request.user == profile.user and bracelet.unique_code == unique_code:
                 bracelet.profile = profile
-                bracelet.is_activated = True
                 profile.is_activated = True
                 bracelet.save()
                 profile.save()
@@ -190,20 +206,19 @@ class JoinHandler(APIView):
 class DisconnectBracelet(APIView):
     def post(self, request, pk):
         try:
-            profile=Profile.objects.get(pk=pk)
-            
+            profile = Profile.objects.get(pk=pk)
+
             if request.user != profile.user:
                 return Response(status=status.HTTP_403_FORBIDDEN)
-                
+
             bracelet = Bracelet.objects.get(profile__id=pk, id=request.data['id'])
-            bracelet.is_activated = False
             bracelet.profile = None
             bracelet.save()
             if Bracelet.objects.select_related('profile').filter(profile__id=profile.id).count() <= 0:
                 profile.is_activated = False
                 profile.save()
-            return  Response({"status": "Bracelet disconnected"})
-        
+            return Response({"status": "Bracelet disconnected"})
+
         except (KeyError, ValueError, TypeError):
             return Response({"status": "unique_code and profile_id are required"}, status=status.HTTP_400_BAD_REQUEST)
         except ObjectDoesNotExist:

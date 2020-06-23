@@ -67,7 +67,13 @@ class ProfileViewListSerializer(serializers.ModelSerializer):
         model = Profile
         fields = ('name', 'bracelets', 'is_activated')
 
-        
+
+class NewProfileNameSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = ('name',)
+
+
 class PVLS(serializers.ModelSerializer):
     class Meta:
         model = Bracelet
