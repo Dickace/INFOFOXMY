@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinLengthValidator
+
 User = get_user_model()
 
 
@@ -34,27 +35,26 @@ class InfoBlock(models.Model):
 
 
 class Bracelet(models.Model):
-    profile = models.ForeignKey(Profile, 
-                                on_delete=models.SET_NULL, 
-                                null=True, 
-                                blank=True, 
-                                default=None, 
+    profile = models.ForeignKey(Profile,
+                                on_delete=models.SET_NULL,
+                                null=True,
+                                blank=True,
+                                default=None,
                                 related_name='bracelets')
-    
+
     unique_code = models.CharField(unique=True,
                                    max_length=8,
                                    validators=[MinLengthValidator(8)])
 
-
     def __int__(self):
         return self.id
-    
+
     def __str__(self):
         if self.profile != '' and self.profile is not None:
             return f'Присоединён к {self.profile}, id={self.id}'
         else:
             return f'<Not activated>, id={self.id}'
-    
+
     class Meta:
         verbose_name = 'Носитель'
         verbose_name_plural = 'Носители'
