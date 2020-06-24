@@ -76,3 +76,9 @@ class NewProfileNameSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = ('name',)
+
+
+class BraceletsFromProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Bracelet
+        fields = ('id',)

@@ -152,6 +152,21 @@ class InfoBlockFromProfileListView(APIView):
             return Response(status=status.HTTP_404_NOT_FOUND)
 
 
+class BraceletFromProfile(APIView):
+    @permission_classes([IsAuthenticated])
+    def get(self, request, pk):
+        try:
+            profile = Profile.objects.get(pk=pk)
+            if request.user == profile.user and profile.is_activated:
+                bracelets = Bracelet.objects.select_related('profile').filter(profile=profile)
+                serializer = BraceletsFromProfileSerializer(bracelets, many=True)
+                return Response(data=serializer.data, status=status.HTTP_200_OK)
+            else:
+                return Response(data={'status': 'Браслеты или профиль не найдены'}, status=status.HTTP_423_LOCKED)
+        except ObjectDoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+
+
 class AccountDefinition(APIView):
     @permission_classes([AllowAny])
     def get(self, request, pk):
